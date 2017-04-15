@@ -152,8 +152,8 @@ enum {
 
     locationManager.pausesLocationUpdatesAutomatically = _config.pauseLocationUpdates;
     locationManager.activityType = [_config decodeActivityType];
-    locationManager.distanceFilter =  kCLDistanceFilterNone;; // meters //20170415 LP
-    locationManager.desiredAccuracy = kCLLocationAccuracyBestForNavigation; //20170415 LP
+    locationManager.distanceFilter = _config.distanceFilter; // meters
+    locationManager.desiredAccuracy = [_config decodeDesiredAccuracy];
 
     // ios 8 requires permissions to send local-notifications
     if (_config.isDebugging) {
@@ -545,10 +545,6 @@ enum {
         if ([bgloc isBetterLocation:bestLocation]) {
             DDLogInfo(@"Better location found: %@", bgloc);
             bestLocation = bgloc;
-            bgloc.type = @"raw";
-            if (self.delegate && [self.delegate respondsToSelector:@selector(onLocationChanged:)]) {
-                [self.delegate onLocationChanged:[bgloc toDictionary]];
-            }
         }
     }
 
@@ -597,14 +593,17 @@ enum {
         // We should have a good sample for speed now, power down our GPS as configured by user.
         isAcquiringSpeed = NO;
         locationManager.desiredAccuracy = _config.desiredAccuracy;
-        //locationManager.distanceFilter = [self calculateDistanceFilter:[bestLocation.speed floatValue]];
-        locationManager.distanceFilter = _config.distanceFilter;
+        locationManager.distanceFilter = [self calculateDistanceFilter:[bestLocation.speed floatValue]];
         [self startUpdatingLocation];
 
     } else if (actAsInMode == FOREGROUND) {
         // Adjust distanceFilter incrementally based upon current speed
-        locationManager.distanceFilter = _config.distanceFilter;
-        [self startUpdatingLocation];
+        float newDistanceFilter = [self calculateDistanceFilter:[bestLocation.speed floatValue]];
+        if (newDistanceFilter != locationManager.distanceFilter) {
+            DDLogInfo(@"LocationManager updated distanceFilter, new: %f, old: %f", newDistanceFilter, locationManager.distanceFilter);
+            locationManager.distanceFilter = newDistanceFilter;
+            [self startUpdatingLocation];
+        }
     } else if ([self locationIsBeyondStationaryRegion:bestLocation]) {
         if (_config.isDebugging) {
             [self notify:@"Manual stationary exit-detection"];
